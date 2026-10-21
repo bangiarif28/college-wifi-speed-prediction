@@ -354,7 +354,7 @@ else:
     st.markdown(f"**Prediction target:** `{TARGET}`")
     st.info("Keep the trained model and dataset files beside app.py in the GitHub repository.")
 
-st.markdown('<div class="footer">📶   RGUKT RK Valley   |   College Wi-Fi Speed Prediction   |   Machine Learning Dashboard</div>', unsafe_allow_html=True)import base64
+st.caption("📶 RGUKT RK Valley | College Wi-Fi Speed Prediction | Machine Learning Dashboard")
 from pathlib import Path
 
 import joblib
