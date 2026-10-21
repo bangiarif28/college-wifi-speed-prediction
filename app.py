@@ -20,7 +20,7 @@ st.set_page_config(
 BASE_DIR = Path(__file__).parent
 DATA_PATH = BASE_DIR / "rgukt_rk_valley_wifi_dataset.csv"
 MODEL_PATH = BASE_DIR / "wifi_speed_model.pkl"
-BANNER_PATH = BASE_DIR /"rgukt_banner.avif"  # optional campus photo
+BANNER_PATH = BASE_DIR / "rgukt_banner.avif"  # optional campus photo
 TARGET = "Download_Speed_Mbps"
 FEATURES = [
     "Connected_Users",
