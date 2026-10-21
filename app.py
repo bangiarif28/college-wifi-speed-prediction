@@ -57,7 +57,7 @@ st.markdown(
     [data-testid="stSidebar"] * {{ color: #F4F9FF; }}
     [data-testid="stSidebar"] [data-testid="stRadio"] > div {{ gap: 10px; }}
     [data-testid="stSidebar"] [data-testid="stRadio"] label {{
-        box-sizing: border-box; width: 100%; min-height: 48px; padding: 12px 14px;
+        box-sizing: border-box; width: 100%; min-height: 48px; padding: 12px 14px; display: flex; align-items: center;
         border: 1px solid rgba(255,255,255,.12); border-radius: 12px;
         background: rgba(255,255,255,.075); font-size: 15px; font-weight: 600;
         transition: background .15s ease;
@@ -171,6 +171,7 @@ with st.sidebar:
             "About Project": "ℹ️  About Project",
         }[x],
         label_visibility="collapsed",
+        key="sidebar_navigation",
     )
     st.markdown(
         '<div class="sidebar-bottom">📶<br><br>Project: Wi-Fi Speed Prediction<br>Model: Machine Learning<br>Campus: RGUKT RK Valley</div>',
@@ -236,7 +237,7 @@ elif page == "Complete Dataset":
     m1, m2 = st.columns(2)
     m1.metric("Total Records", f"{len(df):,}")
     m2.metric("Total Columns", len(df.columns))
-    query = st.text_input("🔎 Search across all columns", placeholder="Search a value, day, signal strength...")
+    query = st.text_input("🔎 Search across all columns", placeholder="Search a value, day, signal strength...", key="dataset_search")
     filtered = df.copy()
     if query.strip():
         mask = filtered.astype(str).apply(lambda col: col.str.contains(query.strip(), case=False, regex=False, na=False)).any(axis=1)
@@ -247,18 +248,18 @@ elif page == "Complete Dataset":
         with f1:
             if "Day_of_Week" in filtered.columns:
                 day_options = sorted(filtered["Day_of_Week"].dropna().unique().tolist(), key=str)
-                selected_days = st.multiselect("Day of Week", day_options)
+                selected_days = st.multiselect("Day of Week", day_options, key="dataset_day_filter")
                 if selected_days:
                     filtered = filtered[filtered["Day_of_Week"].isin(selected_days)]
         with f2:
             h = numeric(filtered["Time_of_Day_Hour"]).dropna()
             if not h.empty and h.min() < h.max():
-                hrange = st.slider("Hour range", int(h.min()), int(h.max()), (int(h.min()), int(h.max())))
+                hrange = st.slider("Hour range", int(h.min()), int(h.max()), (int(h.min()), int(h.max())), key="dataset_hour_range")
                 filtered = filtered[numeric(filtered["Time_of_Day_Hour"]).between(*hrange)]
         with f3:
             u = numeric(filtered["Connected_Users"]).dropna()
             if not u.empty and u.min() < u.max():
-                urange = st.slider("Connected users range", int(u.min()), int(u.max()), (int(u.min()), int(u.max())))
+                urange = st.slider("Connected users range", int(u.min()), int(u.max()), (int(u.min()), int(u.max())), key="dataset_users_range")
                 filtered = filtered[numeric(filtered["Connected_Users"]).between(*urange)]
 
     st.caption(f"Showing {len(filtered):,} of {len(df):,} records")
@@ -272,37 +273,95 @@ elif page == "Predict Wi-Fi Speed":
     banner("Enter network conditions to estimate download speed")
     heading("📡  Wi-Fi Speed Prediction")
     st.write("Complete all six inputs and click Predict. The result is an ML estimate, not a live speed test.")
-    with st.form("prediction_form"):
+    with st.form("prediction_form", clear_on_submit=False):
         left, right = st.columns(2)
         with left:
-            connected = st.number_input("👥 Connected Users", min_value=1, max_value=1000, value=25, step=1)
-            devices = st.number_input("📱 Active Devices", min_value=1, max_value=2000, value=35, step=1)
-            hour = st.slider("🕒 Time of Day (hour)", 0, 23, 12)
+            connected = st.number_input("👥 Connected Users", min_value=1, max_value=1000, value=25, step=1, key="predict_connected_users")
+            devices = st.number_input("📱 Active Devices", min_value=1, max_value=2000, value=35, step=1, key="predict_active_devices")
+            hour = st.slider("🕒 Time of Day (hour)", 0, 23, 12, key="predict_hour")
         with right:
-            day_name = st.selectbox("📅 Day of Week", DAYS, index=0)
-            signal = st.slider("📶 Signal Strength (dBm)", -90, -30, -55)
-            bandwidth = st.selectbox("🌐 Available Bandwidth (Mbps)", [100, 200, 300, 500], index=1)
+            day_name = st.selectbox("📅 Day of Week", DAYS, index=0, key="predict_day")
+            signal = st.slider("📶 Signal Strength (dBm)", -90, -30, -55, key="predict_signal")
+            bandwidth = st.selectbox("🌐 Available Bandwidth (Mbps)", [100, 200, 300, 500], index=1, key="predict_bandwidth")
         submitted = st.form_submit_button("📶  Predict Wi-Fi Speed", type="primary", use_container_width=True)
 
     if submitted:
-        input_df = pd.DataFrame([{
+        # Keep both the readable form values and the model's expected feature schema.
+        entered_values = {
             "Connected_Users": connected,
             "Active_Devices": devices,
             "Time_of_Day_Hour": hour,
             "Day_of_Week": DAYS.index(day_name),
             "Signal_Strength_dBm": signal,
             "Available_Bandwidth_Mbps": bandwidth,
-        }], columns=FEATURES)
+        }
+        input_df = pd.DataFrame([entered_values], columns=FEATURES)
+
         try:
-            result = float(model.predict(input_df)[0])
+            # Many sklearn estimators record their exact training column names.
+            # Use them if present so column-order/name mismatches don't break prediction.
+            expected_features = getattr(model, "feature_names_in_", None)
+            model_input = input_df.copy()
+            if expected_features is not None:
+                expected_features = list(expected_features)
+                aliases = {
+                    "connected_users": "Connected_Users",
+                    "active_devices": "Active_Devices",
+                    "time_of_day_hour": "Time_of_Day_Hour",
+                    "hour": "Time_of_Day_Hour",
+                    "day_of_week": "Day_of_Week",
+                    "signal_strength_dbm": "Signal_Strength_dBm",
+                    "signal_strength": "Signal_Strength_dBm",
+                    "available_bandwidth_mbps": "Available_Bandwidth_Mbps",
+                    "available_bandwidth": "Available_Bandwidth_Mbps",
+                }
+                normalized_input = {str(k).strip().lower(): v for k, v in entered_values.items()}
+                normalized_input.update({
+                    "connected_users": connected,
+                    "active_devices": devices,
+                    "time_of_day_hour": hour,
+                    "hour": hour,
+                    "day_of_week": DAYS.index(day_name),
+                    "signal_strength_dbm": signal,
+                    "signal_strength": signal,
+                    "available_bandwidth_mbps": bandwidth,
+                    "available_bandwidth": bandwidth,
+                })
+                row = {}
+                for feature in expected_features:
+                    normalized_name = str(feature).strip().lower()
+                    if normalized_name in normalized_input:
+                        row[feature] = normalized_input[normalized_name]
+                    else:
+                        source_name = aliases.get(normalized_name)
+                        if source_name in entered_values:
+                            row[feature] = entered_values[source_name]
+                        else:
+                            raise ValueError(
+                                f"The saved model expects input feature '{feature}', "
+                                "but this app does not have a matching input field. "
+                                "Please check the model's training columns."
+                            )
+                model_input = pd.DataFrame([row], columns=expected_features)
+
+            # Prefer DataFrame input; some models were trained on NumPy arrays only.
+            try:
+                prediction = model.predict(model_input)
+            except (TypeError, ValueError) as dataframe_error:
+                try:
+                    prediction = model.predict(model_input.to_numpy())
+                except Exception:
+                    raise dataframe_error
+
+            result = float(np.asarray(prediction).reshape(-1)[0])
             if not np.isfinite(result) or result < 0:
-                st.error("The model returned an invalid speed. Check the model and training data.")
+                st.error("The model returned an invalid speed. Check the trained model and training data.")
             else:
                 st.success("🎉 Prediction Completed Successfully!")
-                st.balloons()
                 st.metric("📶 Predicted Download Speed", f"{result:.2f} Mbps")
-                st.progress(min(max(result / max(float(speeds.max()) if not speeds.empty else 100, 1), 0.0), 1.0))
-                st.caption("Prediction output is estimated from the trained model; it does not measure current network speed.")
+                reference_max = float(numeric(df[TARGET]).max()) if numeric(df[TARGET]).notna().any() else 100.0
+                st.progress(float(np.clip(result / max(reference_max, 1.0), 0.0, 1.0)))
+                st.caption("This is a Machine Learning estimate, not a live Wi-Fi speed test.")
                 st.session_state.prediction_history.insert(0, {
                     "Connected_Users": connected,
                     "Active_Devices": devices,
@@ -315,8 +374,13 @@ elif page == "Predict Wi-Fi Speed":
                 with st.expander("View prediction inputs"):
                     st.dataframe(input_df, use_container_width=True, hide_index=True)
         except Exception as exc:
-            st.error("Prediction failed. The model may expect different feature names or input types.")
-            st.exception(exc)
+            st.error("Prediction could not be completed. Check the details below.")
+            st.code(f"{type(exc).__name__}: {exc}")
+            st.info(
+                "If the message mentions a missing feature, feature names, or a different number of inputs, "
+                "the saved model was trained with a different input schema than this form. "
+                "The model and its original training feature columns must match."
+            )
 
 # --------------------------- HISTORY ---------------------------
 elif page == "Prediction History":
@@ -328,7 +392,7 @@ elif page == "Prediction History":
         st.metric("Predictions This Session", len(hist_df))
         st.dataframe(hist_df, use_container_width=True, hide_index=True)
         st.download_button("⬇️  Download Prediction History", hist_df.to_csv(index=False).encode("utf-8"), "rgukt_prediction_history.csv", "text/csv")
-        if st.button("🗑️  Clear History"):
+        if st.button("🗑️  Clear History", key="clear_prediction_history"):
             st.session_state.prediction_history = []
             st.rerun()
     else:
@@ -346,7 +410,7 @@ else:
     - 📊 Dataset summary and performance charts
     - 🗄️ Searchable complete dataset and CSV exports
     - 📶 Prediction form using the six model input fields
-    - 🎉 Prediction completion animation
+    - ✅ Prediction success confirmation
     - 🕘 Session-based prediction history
     """)
     st.markdown("**Model input features**")
