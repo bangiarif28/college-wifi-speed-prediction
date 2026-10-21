@@ -2,27 +2,26 @@ import base64
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 import streamlit as st
 
-# --------------------------------------------------
-# PAGE CONFIGURATION
-# --------------------------------------------------
+# ============================================================
+# RGUKT RK Valley | College Wi-Fi Speed Prediction Dashboard
+# Keep app.py, the CSV dataset, and model file in the same folder.
+# ============================================================
 st.set_page_config(
-    page_title="RGUKT RK Valley Wi-Fi Dashboard",
+    page_title="College Wi-Fi Speed Prediction | RGUKT RK Valley",
     page_icon="📶",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# --------------------------------------------------
-# FILE PATHS AND DATA
-# --------------------------------------------------
 BASE_DIR = Path(__file__).parent
 DATA_PATH = BASE_DIR / "rgukt_rk_valley_wifi_dataset.csv"
 MODEL_PATH = BASE_DIR / "wifi_speed_model.pkl"
-BANNER_PATH = BASE_DIR / "rgukt_banner.avif"
-
+BANNER_PATH = BASE_DIR / "rgukt_banner.avif"  # optional campus photo
+TARGET = "Download_Speed_Mbps"
 FEATURES = [
     "Connected_Users",
     "Active_Devices",
@@ -31,676 +30,684 @@ FEATURES = [
     "Signal_Strength_dBm",
     "Available_Bandwidth_Mbps",
 ]
+DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-TARGET = "Download_Speed_Mbps"
+# Exact visual theme inspired by the preview: navy, royal blue, cyan, icy background.
+NAVY = "#082B52"
+NAVY_DARK = "#062447"
+ROYAL = "#1677F8"
+CYAN = "#19B9F2"
+PALE = "#F3F8FF"
+INK = "#103A78"
+MUTED = "#607A9B"
 
-DAY_NAMES = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-]
-
-# --------------------------------------------------
-# LOAD FILES
-# --------------------------------------------------
-@st.cache_data
-def load_dataset(path):
-    return pd.read_csv(path)
-
-
-@st.cache_resource
-def load_model(path):
-    return joblib.load(path)
-
-
-# --------------------------------------------------
-# CUSTOM CSS
-# --------------------------------------------------
 st.markdown(
-    """
+    f"""
     <style>
-    .stApp {
-        background-color: #f4f7fb;
-    }
-
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #102a43 0%, #174c72 100%);
-    }
-
-    [data-testid="stSidebar"] * {
-        color: white;
-    }
-
-    [data-testid="stSidebar"] .stRadio > div {
-        gap: 12px;
-    }
-
-    [data-testid="stSidebar"] .stRadio label {
-        background: rgba(255,255,255,0.10);
-        border: 1px solid rgba(255,255,255,0.20);
-        padding: 13px 16px;
-        border-radius: 12px;
-        width: 100%;
-        font-size: 17px;
-        font-weight: 600;
-        transition: 0.2s;
-    }
-
-    [data-testid="stSidebar"] .stRadio label:hover {
-        background: rgba(255,255,255,0.23);
-    }
-
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2 {
-        color: white;
-    }
-
-    .hero {
-        padding: 48px 35px;
-        border-radius: 20px;
-        color: white;
-        margin-bottom: 25px;
-        background:
-            linear-gradient(90deg, rgba(8,30,55,0.88),
-            rgba(8,30,55,0.45)),
-            linear-gradient(135deg, #174c72, #3c91b8);
-        background-size: cover;
-        background-position: center;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-    }
-
-    .hero h1 {
-        color: white;
-        font-size: 34px;
-        margin-bottom: 10px;
-    }
-
-    .hero p {
-        color: #f0f7ff;
-        font-size: 17px;
-        margin-bottom: 0;
-    }
-
-    .section-title {
-        color: #173b57;
-        font-size: 25px;
-        font-weight: 700;
-        margin-top: 12px;
-        margin-bottom: 15px;
-    }
-
-    div[data-testid="stMetric"] {
-        background: white;
-        padding: 18px;
-        border-radius: 14px;
-        border: 1px solid #e4eaf1;
-        box-shadow: 0 3px 12px rgba(25,50,75,0.05);
-    }
-
-    div.stButton > button {
-        border-radius: 10px;
-        min-height: 45px;
-        font-size: 16px;
-        font-weight: 600;
-    }
-
-    div[data-testid="stForm"] {
-        background: white;
-        padding: 22px;
-        border: 1px solid #e4eaf1;
-        border-radius: 16px;
-    }
-
-    .small-note {
-        color: #64748b;
-        font-size: 13px;
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    html, body, [class*="css"], [data-testid="stAppViewContainer"] {{
+        font-family: 'Inter', Arial, sans-serif;
+    }}
+    .stApp {{ background: {PALE}; color: {INK}; }}
+    .block-container {{ max-width: 1600px; padding-top: 1.05rem; padding-bottom: 1.5rem; }}
+    [data-testid="stSidebar"] {{
+        background: linear-gradient(180deg, {NAVY_DARK} 0%, {NAVY} 55%, #0B477A 100%);
+        border-right: 1px solid #164b7a;
+    }}
+    [data-testid="stSidebar"] * {{ color: #F4F9FF; }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] > div {{ gap: 10px; }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label {{
+        box-sizing: border-box; width: 100%; min-height: 48px; padding: 12px 14px;
+        border: 1px solid rgba(255,255,255,.12); border-radius: 12px;
+        background: rgba(255,255,255,.075); font-size: 15px; font-weight: 600;
+        transition: background .15s ease;
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
+        background: rgba(25,185,242,.23); border-color: rgba(25,185,242,.7);
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {{
+        background: linear-gradient(90deg, {ROYAL}, #258DFB); border-color: #4EA4FF;
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label p {{ color: white !important; }}
+    .brand {{ padding: 6px 2px 14px; }}
+    .brand-icon {{ font-size: 39px; line-height: 1; }}
+    .brand-title {{ font-size: 19px; font-weight: 800; line-height: 1.35; color: white; }}
+    .brand-sub {{ font-size: 12px; color: #B9D7F5; margin-top: 5px; }}
+    .sidebar-bottom {{ margin-top: 22px; padding: 18px 8px 8px; border-top: 1px solid #2A5A82; color: #C5DDF4; font-size: 12px; line-height: 1.8; }}
+    .hero {{
+        position: relative; overflow: hidden; min-height: 150px; padding: 30px 32px;
+        border-radius: 15px; margin: 0 0 18px 0; color: white;
+        background: linear-gradient(100deg, rgba(4,35,72,.97), rgba(10,82,145,.83), rgba(16,119,197,.48)),
+                    linear-gradient(120deg, #0A3566, #1677B8);
+        background-position: center; background-size: cover;
+        box-shadow: 0 6px 20px rgba(14,64,120,.12);
+    }}
+    .hero h1 {{ color: #fff !important; font-size: clamp(25px, 2.5vw, 36px); font-weight: 800; margin: 0 0 7px 0; letter-spacing: -.7px; }}
+    .hero .hero-sub {{ color: #F2F8FF; font-size: 16px; margin: 0; }}
+    .hero .hero-tag {{ color: #D3EEFF; font-size: 12px; margin-top: 9px; letter-spacing: .5px; }}
+    .wifi-mark {{ float: left; font-size: 51px; margin-right: 20px; margin-top: 7px; }}
+    .section-heading {{ font-size: 22px; font-weight: 800; color: #123F91; margin: 14px 0 10px; }}
+    .panel {{ background: #fff; border: 1px solid #D5E5FA; border-radius: 13px; padding: 15px 17px; }}
+    [data-testid="stMetric"] {{ background: white; border: 1px solid #D5E5FA; border-radius: 12px; padding: 16px 17px; box-shadow: 0 2px 8px rgba(20,74,140,.035); }}
+    [data-testid="stMetricLabel"] {{ color: #174A8A; font-weight: 600; }}
+    [data-testid="stMetricValue"] {{ color: #082F6C; font-weight: 800; }}
+    h1, h2, h3 {{ color: #123F91; }}
+    div.stButton > button, div.stDownloadButton > button, div[data-testid="stFormSubmitButton"] button {{
+        border-radius: 10px; min-height: 43px; font-weight: 700; border: 1px solid #1677F8;
+    }}
+    div[data-testid="stDataFrame"] {{ border: 1px solid #D5E5FA; border-radius: 10px; overflow: hidden; }}
+    div[data-testid="stForm"] {{ background: white; border: 1px solid #D5E5FA; border-radius: 14px; padding: 20px; }}
+    .footer {{ margin-top: 18px; padding: 12px 16px; border-radius: 10px; background: #E7F1FF; color: #285C99; font-size: 12px; }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# Add campus image as banner background when available.
+# Optional local campus banner. For a real campus photo, upload rgukt_banner.jpg to the repo.
 if BANNER_PATH.exists():
-    encoded_image = base64.b64encode(BANNER_PATH.read_bytes()).decode()
-    st.markdown(
-        f"""
-        <style>
-        .hero {{
-            background-image:
-                linear-gradient(90deg, rgba(8,30,55,0.88),
-                rgba(8,30,55,0.42)),
-                url("data:image/jpeg;base64,{encoded_image}");
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# --------------------------------------------------
-# LOAD DATA AND MODEL SAFELY
-# --------------------------------------------------
-try:
-    if not DATA_PATH.exists():
-        st.error(
-            "Dataset file not found. Add "
-            "'rgukt_rk_valley_wifi_dataset.csv' "
-            "to the same folder as app.py."
+    try:
+        image_b64 = base64.b64encode(BANNER_PATH.read_bytes()).decode("utf-8")
+        st.markdown(
+            f"""<style>.hero {{background-image: linear-gradient(90deg,rgba(4,35,72,.94),rgba(4,55,105,.72),rgba(4,55,105,.28)), url('data:image/jpeg;base64,{image_b64}');}}</style>""",
+            unsafe_allow_html=True,
         )
-        st.stop()
+    except Exception:
+        pass
 
-    if not MODEL_PATH.exists():
-        st.error(
-            "Model file not found. Add "
-            "'wifi_speed_model.pkl' "
-            "to the same folder as app.py."
-        )
-        st.stop()
+@st.cache_data
+def load_dataset(path, mtime):
+    return pd.read_csv(path)
 
-    df = load_dataset(str(DATA_PATH))
-    model = load_model(str(MODEL_PATH))
+@st.cache_resource
+def load_model(path, mtime):
+    return joblib.load(path)
 
-except Exception as error:
-    st.error(f"Unable to load the app files: {error}")
-    st.stop()
-
-missing_columns = [
-    column for column in FEATURES + [TARGET]
-    if column not in df.columns
-]
-
-if missing_columns:
-    st.error(
-        "The dataset is missing required columns: "
-        + ", ".join(missing_columns)
-    )
-    st.stop()
-
-# --------------------------------------------------
-# SIDEBAR NAVIGATION
-# --------------------------------------------------
-with st.sidebar:
-    st.markdown("## 📶 RGUKT RK Valley")
-    st.markdown("### Wi-Fi Analytics")
-    st.caption("Machine Learning Dashboard")
-    st.divider()
-
-    page = st.radio(
-        "NAVIGATION",
-        [
-            "🏠 Dashboard",
-            "📊 Complete Dataset",
-            "🚀 Predict Wi-Fi Speed",
-            "🕘 Prediction History",
-            "ℹ️ About Project",
-        ],
-        label_visibility="collapsed",
-    )
-
-    st.divider()
-    st.markdown("**Project:** Wi-Fi Speed Prediction")
-    st.markdown("**Model:** Machine Learning")
-    st.markdown("**Campus:** RGUKT RK Valley")
-
-# --------------------------------------------------
-# SHARED FUNCTIONS
-# --------------------------------------------------
-def show_banner(subtitle):
-    st.markdown(
-        f"""
-        <div class="hero">
-            <h1>📶 RGUKT RK Valley Wi-Fi Dashboard</h1>
-            <p>{subtitle}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def show_section(title):
-    st.markdown(
-        f'<div class="section-title">{title}</div>',
-        unsafe_allow_html=True,
-    )
-
-
-def safe_number(series):
+def numeric(series):
     return pd.to_numeric(series, errors="coerce")
 
+def banner(subtitle):
+    st.markdown(
+        f"""<div class="hero"><div class="wifi-mark">📶</div><h1>College Wi-Fi Speed Prediction</h1><p class="hero-sub">RGUKT RK Valley</p><p class="hero-tag">{subtitle}</p></div>""",
+        unsafe_allow_html=True,
+    )
 
-# Prediction history stays available while this app session is open.
+def heading(text):
+    st.markdown(f'<div class="section-heading">{text}</div>', unsafe_allow_html=True)
+
+# Load real project files; don't silently substitute sample data.
+if not DATA_PATH.exists():
+    st.error(f"Dataset not found: {DATA_PATH.name}. Upload it beside app.py in GitHub.")
+    st.stop()
+if not MODEL_PATH.exists():
+    st.error(f"Trained model not found: {MODEL_PATH.name}. Upload it beside app.py in GitHub.")
+    st.stop()
+try:
+    df = load_dataset(str(DATA_PATH), DATA_PATH.stat().st_mtime)
+    model = load_model(str(MODEL_PATH), MODEL_PATH.stat().st_mtime)
+except Exception as exc:
+    st.error(f"Could not load the dataset or model: {exc}")
+    st.stop()
+
+required = FEATURES + [TARGET]
+missing = [c for c in required if c not in df.columns]
+if missing:
+    st.error("Expected columns missing from the dataset: " + ", ".join(missing))
+    st.write("Columns found:", list(df.columns))
+    st.stop()
+
+with st.sidebar:
+    st.markdown(
+        '<div class="brand"><div class="brand-icon">📶</div><div class="brand-title">RGUKT RK Valley<br>Wi-Fi Analytics</div><div class="brand-sub">Machine Learning Dashboard</div></div>',
+        unsafe_allow_html=True,
+    )
+    page = st.radio(
+        "Navigation",
+        ["Dashboard", "Complete Dataset", "Predict Wi-Fi Speed", "Prediction History", "About Project"],
+        format_func=lambda x: {
+            "Dashboard": "🏠  Dashboard",
+            "Complete Dataset": "🗄️  Complete Dataset",
+            "Predict Wi-Fi Speed": "📡  Predict Wi-Fi Speed",
+            "Prediction History": "🕘  Prediction History",
+            "About Project": "ℹ️  About Project",
+        }[x],
+        label_visibility="collapsed",
+    )
+    st.markdown(
+        '<div class="sidebar-bottom">📶<br><br>Project: Wi-Fi Speed Prediction<br>Model: Machine Learning<br>Campus: RGUKT RK Valley</div>',
+        unsafe_allow_html=True,
+    )
+
 if "prediction_history" not in st.session_state:
     st.session_state.prediction_history = []
 
-# --------------------------------------------------
-# PAGE 1: DASHBOARD
-# --------------------------------------------------
-if page == "🏠 Dashboard":
-    show_banner(
-        "Monitor network activity, explore Wi-Fi performance, "
-        "and predict download speed using Machine Learning."
-    )
+# --------------------------- DASHBOARD ---------------------------
+if page == "Dashboard":
+    banner("Smart Campus Network Analytics")
+    speeds = numeric(df[TARGET]).dropna()
+    users = numeric(df["Connected_Users"]).dropna()
+    avg_speed = speeds.mean() if not speeds.empty else np.nan
+    max_speed = speeds.max() if not speeds.empty else np.nan
+    avg_users = users.mean() if not users.empty else np.nan
 
-    total_records = len(df)
-    avg_speed = safe_number(df[TARGET]).mean()
-    max_speed = safe_number(df[TARGET]).max()
-    avg_users = safe_number(df["Connected_Users"]).mean()
+    a, b, c, d = st.columns(4)
+    a.metric("🗄️  Dataset Records", f"{len(df):,}")
+    b.metric("⚡  Average Download Speed", f"{avg_speed:.2f} Mbps" if pd.notna(avg_speed) else "N/A")
+    c.metric("🚀  Peak Download Speed", f"{max_speed:.2f} Mbps" if pd.notna(max_speed) else "N/A")
+    d.metric("👥  Average Connected Users", f"{avg_users:.1f}" if pd.notna(avg_users) else "N/A")
 
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric("📁 Dataset Records", f"{total_records:,}")
-    c2.metric(
-        "⚡ Average Download Speed",
-        f"{avg_speed:.2f} Mbps" if pd.notna(avg_speed) else "N/A",
-    )
-    c3.metric(
-        "🚀 Highest Download Speed",
-        f"{max_speed:.2f} Mbps" if pd.notna(max_speed) else "N/A",
-    )
-    c4.metric(
-        "👥 Average Connected Users",
-        f"{avg_users:.1f}" if pd.notna(avg_users) else "N/A",
-    )
-
-    st.divider()
-
-    show_section("📈 Wi-Fi Performance Analytics")
-
-    left, right = st.columns(2)
-
-    # Speed distribution
-    with left:
-        st.subheader("Download Speed Distribution")
-
-        speeds = safe_number(df[TARGET]).dropna()
-
+    heading("▥  Wi-Fi Performance Analytics")
+    chart1, chart2, chart3 = st.columns([1.08, 1.08, 1.08])
+    with chart1:
+        st.markdown("**📶  Download Speed Distribution**")
         if not speeds.empty:
-            counts, edges = __import__("numpy").histogram(
-                speeds, bins=12
-            )
-            labels = [
-                f"{edges[i]:.1f}–{edges[i + 1]:.1f}"
-                for i in range(len(edges) - 1)
-            ]
-            distribution = pd.DataFrame(
-                {"Speed Range (Mbps)": labels, "Records": counts}
-            ).set_index("Speed Range (Mbps)")
-
-            st.bar_chart(distribution)
+            counts, edges = np.histogram(speeds, bins=10)
+            labels = [f"{edges[i]:.0f}–{edges[i+1]:.0f}" for i in range(len(edges)-1)]
+            hist_df = pd.DataFrame({"Speed range (Mbps)": labels, "Records": counts}).set_index("Speed range (Mbps)")
+            st.bar_chart(hist_df, height=260, color=ROYAL)
         else:
-            st.info("No valid download-speed values to display.")
-
-    # Speed vs connected users
-    with right:
-        st.subheader("Speed vs Connected Users")
-
-        scatter_data = df[
-            ["Connected_Users", TARGET]
-        ].copy()
-
-        scatter_data["Connected_Users"] = safe_number(
-            scatter_data["Connected_Users"]
-        )
-        scatter_data[TARGET] = safe_number(scatter_data[TARGET])
-        scatter_data = scatter_data.dropna()
-
-        if not scatter_data.empty:
-            st.scatter_chart(
-                scatter_data,
-                x="Connected_Users",
-                y=TARGET,
-                x_label="Connected Users",
-                y_label="Download Speed (Mbps)",
-            )
+            st.info("No numeric speed data available.")
+    with chart2:
+        st.markdown("**🔵  Speed vs Connected Users**")
+        scatter = pd.DataFrame({"Connected Users": numeric(df["Connected_Users"]), "Download Speed (Mbps)": numeric(df[TARGET])}).dropna()
+        if not scatter.empty:
+            st.scatter_chart(scatter, x="Connected Users", y="Download Speed (Mbps)", height=260, color=ROYAL)
         else:
-            st.info("No valid records to display.")
+            st.info("No data available for this chart.")
+    with chart3:
+        st.markdown("**🕒  Average Speed by Hour**")
+        hourly = pd.DataFrame({"Hour": numeric(df["Time_of_Day_Hour"]), "Speed": numeric(df[TARGET])}).dropna()
+        if not hourly.empty:
+            hourly_avg = hourly.groupby("Hour")["Speed"].mean().sort_index()
+            hourly_avg.index = hourly_avg.index.astype(int).astype(str)
+            hourly_avg.index.name = "Hour of Day"
+            st.line_chart(hourly_avg, height=260, color="#7457FF")
+        else:
+            st.info("No hourly data available.")
 
-    st.subheader("Average Download Speed by Hour")
+    heading("🗄️  Complete Dataset")
+    st.caption("Preview of the first five records. Open Complete Dataset to search and view every row.")
+    st.dataframe(df.head(5), use_container_width=True, hide_index=True)
+    st.markdown('<div class="footer">ℹ️   Charts are based on the dataset in this repository. Predictions are estimates, not live Wi-Fi measurements. <span style="float:right">📶   Better Connectivity   |   Smarter Campus</span></div>', unsafe_allow_html=True)
 
-    hourly = df[["Time_of_Day_Hour", TARGET]].copy()
-    hourly["Time_of_Day_Hour"] = safe_number(
-        hourly["Time_of_Day_Hour"]
-    )
-    hourly[TARGET] = safe_number(hourly[TARGET])
-    hourly = hourly.dropna()
+# --------------------------- COMPLETE DATASET ---------------------------
+elif page == "Complete Dataset":
+    banner("Search, filter, inspect, and download the full Wi-Fi dataset")
+    heading("🗄️  Complete Dataset")
+    m1, m2 = st.columns(2)
+    m1.metric("Total Records", f"{len(df):,}")
+    m2.metric("Total Columns", len(df.columns))
+    query = st.text_input("🔎 Search across all columns", placeholder="Search a value, day, signal strength...")
+    filtered = df.copy()
+    if query.strip():
+        mask = filtered.astype(str).apply(lambda col: col.str.contains(query.strip(), case=False, regex=False, na=False)).any(axis=1)
+        filtered = filtered.loc[mask]
 
-    if not hourly.empty:
-        hourly_avg = (
-            hourly.groupby("Time_of_Day_Hour")[TARGET]
-            .mean()
-            .sort_index()
-        )
-        hourly_avg.index = hourly_avg.index.astype(int).astype(str)
-        hourly_avg.index.name = "Hour of Day"
-        st.line_chart(hourly_avg)
-    else:
-        st.info("No valid hourly data to display.")
+    with st.expander("⚙️  Filters", expanded=True):
+        f1, f2, f3 = st.columns(3)
+        with f1:
+            if "Day_of_Week" in filtered.columns:
+                day_options = sorted(filtered["Day_of_Week"].dropna().unique().tolist(), key=str)
+                selected_days = st.multiselect("Day of Week", day_options)
+                if selected_days:
+                    filtered = filtered[filtered["Day_of_Week"].isin(selected_days)]
+        with f2:
+            h = numeric(filtered["Time_of_Day_Hour"]).dropna()
+            if not h.empty and h.min() < h.max():
+                hrange = st.slider("Hour range", int(h.min()), int(h.max()), (int(h.min()), int(h.max())))
+                filtered = filtered[numeric(filtered["Time_of_Day_Hour"]).between(*hrange)]
+        with f3:
+            u = numeric(filtered["Connected_Users"]).dropna()
+            if not u.empty and u.min() < u.max():
+                urange = st.slider("Connected users range", int(u.min()), int(u.max()), (int(u.min()), int(u.max())))
+                filtered = filtered[numeric(filtered["Connected_Users"]).between(*urange)]
 
-    st.caption(
-        "Charts are based on the dataset in the repository. "
-        "Predictions are estimates, not live Wi-Fi measurements."
-    )
+    st.caption(f"Showing {len(filtered):,} of {len(df):,} records")
+    st.dataframe(filtered, use_container_width=True, height=520, hide_index=True)
+    d1, d2 = st.columns(2)
+    d1.download_button("⬇️  Download Filtered CSV", filtered.to_csv(index=False).encode("utf-8"), "rgukt_wifi_filtered.csv", "text/csv", use_container_width=True)
+    d2.download_button("⬇️  Download Full Dataset CSV", df.to_csv(index=False).encode("utf-8"), "rgukt_wifi_full_dataset.csv", "text/csv", use_container_width=True)
 
-# --------------------------------------------------
-# PAGE 2: COMPLETE DATASET
-# --------------------------------------------------
-elif page == "📊 Complete Dataset":
-    show_banner("Explore, search, filter, and download the Wi-Fi dataset.")
-
-    st.metric("Total Dataset Rows", f"{len(df):,}")
-    st.metric("Total Dataset Columns", len(df.columns))
-
-    show_section("🔎 Search and Filter Data")
-
-    search_text = st.text_input(
-        "Search across all columns",
-        placeholder="Type a value, hour, day, or signal strength...",
-    )
-
-    filtered_df = df.copy()
-
-    if search_text.strip():
-        text_df = filtered_df.astype(str)
-        matches = text_df.apply(
-            lambda column: column.str.contains(
-                search_text.strip(),
-                case=False,
-                na=False,
-                regex=False,
-            )
-        ).any(axis=1)
-        filtered_df = filtered_df[matches]
-
-    filter_col1, filter_col2 = st.columns(2)
-
-    with filter_col1:
-        if "Connected_Users" in filtered_df.columns:
-            users_series = safe_number(filtered_df["Connected_Users"])
-            valid_users = users_series.dropna()
-
-            if not valid_users.empty:
-                min_users = int(valid_users.min())
-                max_users = int(valid_users.max())
-
-                if min_users < max_users:
-                    user_range = st.slider(
-                        "Connected Users Range",
-                        min_value=min_users,
-                        max_value=max_users,
-                        value=(min_users, max_users),
-                    )
-                    filtered_df = filtered_df[
-                        safe_number(filtered_df["Connected_Users"])
-                        .between(user_range[0], user_range[1])
-                    ]
-
-    with filter_col2:
-        if "Time_of_Day_Hour" in filtered_df.columns:
-            hours = safe_number(filtered_df["Time_of_Day_Hour"])
-            valid_hours = hours.dropna()
-
-            if not valid_hours.empty:
-                min_hour = int(valid_hours.min())
-                max_hour = int(valid_hours.max())
-
-                if min_hour < max_hour:
-                    hour_range = st.slider(
-                        "Hour Range",
-                        min_value=min_hour,
-                        max_value=max_hour,
-                        value=(min_hour, max_hour),
-                    )
-                    filtered_df = filtered_df[
-                        safe_number(filtered_df["Time_of_Day_Hour"])
-                        .between(hour_range[0], hour_range[1])
-                    ]
-
-    st.write(f"Showing **{len(filtered_df):,}** matching records.")
-
-    st.dataframe(
-        filtered_df,
-        use_container_width=True,
-        height=450,
-        hide_index=True,
-    )
-
-    csv_data = filtered_df.to_csv(index=False).encode("utf-8")
-
-    st.download_button(
-        label="⬇️ Download Displayed Data as CSV",
-        data=csv_data,
-        file_name="rgukt_wifi_dataset_filtered.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
-
-    st.caption(
-        "Clear the search box and widen the filters to display "
-        "the entire dataset."
-    )
-
-# --------------------------------------------------
-# PAGE 3: PREDICT WI-FI SPEED
-# --------------------------------------------------
-elif page == "🚀 Predict Wi-Fi Speed":
-    show_banner(
-        "Enter the network details below to estimate Wi-Fi download speed."
-    )
-
-    show_section("🧠 Enter Network Details")
-
+# --------------------------- PREDICT ---------------------------
+elif page == "Predict Wi-Fi Speed":
+    banner("Enter network conditions to estimate download speed")
+    heading("📡  Wi-Fi Speed Prediction")
+    st.write("Complete all six inputs and click Predict. The result is an ML estimate, not a live speed test.")
     with st.form("prediction_form"):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            users = st.number_input(
-                "👥 Connected Users",
-                min_value=1,
-                max_value=1000,
-                value=25,
-                step=1,
-            )
-
-            devices = st.number_input(
-                "📱 Active Devices",
-                min_value=1,
-                max_value=2000,
-                value=35,
-                step=1,
-            )
-
-            hour = st.slider(
-                "🕒 Time of Day",
-                min_value=0,
-                max_value=23,
-                value=12,
-            )
-
-        with col2:
-            day = st.selectbox(
-                "📅 Day of Week",
-                DAY_NAMES,
-                index=0,
-            )
-
-            signal = st.slider(
-                "📶 Wi-Fi Signal Strength (dBm)",
-                min_value=-90,
-                max_value=-30,
-                value=-55,
-            )
-
-            bandwidth = st.selectbox(
-                "🌐 Available Bandwidth (Mbps)",
-                [100, 200, 300, 500],
-                index=1,
-            )
-
-        submitted = st.form_submit_button(
-            "🚀 Predict Wi-Fi Speed",
-            use_container_width=True,
-            type="primary",
-        )
+        left, right = st.columns(2)
+        with left:
+            connected = st.number_input("👥 Connected Users", min_value=1, max_value=1000, value=25, step=1)
+            devices = st.number_input("📱 Active Devices", min_value=1, max_value=2000, value=35, step=1)
+            hour = st.slider("🕒 Time of Day (hour)", 0, 23, 12)
+        with right:
+            day_name = st.selectbox("📅 Day of Week", DAYS, index=0)
+            signal = st.slider("📶 Signal Strength (dBm)", -90, -30, -55)
+            bandwidth = st.selectbox("🌐 Available Bandwidth (Mbps)", [100, 200, 300, 500], index=1)
+        submitted = st.form_submit_button("📶  Predict Wi-Fi Speed", type="primary", use_container_width=True)
 
     if submitted:
-        input_data = pd.DataFrame(
-            [
-                {
-                    "Connected_Users": users,
-                    "Active_Devices": devices,
-                    "Time_of_Day_Hour": hour,
-                    "Day_of_Week": DAY_NAMES.index(day),
-                    "Signal_Strength_dBm": signal,
-                    "Available_Bandwidth_Mbps": bandwidth,
-                }
-            ],
-            columns=FEATURES,
-        )
-
+        input_df = pd.DataFrame([{
+            "Connected_Users": connected,
+            "Active_Devices": devices,
+            "Time_of_Day_Hour": hour,
+            "Day_of_Week": DAYS.index(day_name),
+            "Signal_Strength_dBm": signal,
+            "Available_Bandwidth_Mbps": bandwidth,
+        }], columns=FEATURES)
         try:
-            prediction = float(model.predict(input_data)[0])
-
-            if not pd.notna(prediction) or prediction < 0:
-                st.error(
-                    "The model returned an invalid prediction. "
-                    "Please check your model and dataset."
-                )
+            result = float(model.predict(input_df)[0])
+            if not np.isfinite(result) or result < 0:
+                st.error("The model returned an invalid speed. Check the model and training data.")
             else:
-                st.success("✅ Prediction completed successfully!")
+                st.success("🎉 Prediction Completed Successfully!")
                 st.balloons()
-
-                st.metric(
-                    "⚡ Predicted Download Speed",
-                    f"{prediction:.2f} Mbps",
-                )
-
-                if prediction < 10:
-                    st.warning(
-                        "The predicted download speed is relatively low."
-                    )
-                elif prediction < 50:
-                    st.info(
-                        "The predicted download speed is in a moderate range."
-                    )
-                else:
-                    st.success(
-                        "The predicted download speed is in a higher range."
-                    )
-
-                st.caption(
-                    "This is a Machine Learning estimate, not a live "
-                    "internet speed test."
-                )
-
-                record = {
-                    "Connected_Users": users,
+                st.metric("📶 Predicted Download Speed", f"{result:.2f} Mbps")
+                st.progress(min(max(result / max(float(speeds.max()) if not speeds.empty else 100, 1), 0.0), 1.0))
+                st.caption("Prediction output is estimated from the trained model; it does not measure current network speed.")
+                st.session_state.prediction_history.insert(0, {
+                    "Connected_Users": connected,
                     "Active_Devices": devices,
                     "Time_of_Day_Hour": hour,
-                    "Day_of_Week": day,
+                    "Day_of_Week": day_name,
                     "Signal_Strength_dBm": signal,
                     "Available_Bandwidth_Mbps": bandwidth,
-                    "Predicted_Download_Speed_Mbps": round(prediction, 2),
-                }
+                    "Predicted_Download_Speed_Mbps": round(result, 2),
+                })
+                with st.expander("View prediction inputs"):
+                    st.dataframe(input_df, use_container_width=True, hide_index=True)
+        except Exception as exc:
+            st.error("Prediction failed. The model may expect different feature names or input types.")
+            st.exception(exc)
 
-                st.session_state.prediction_history.insert(0, record)
-
-                with st.expander("View Input Details"):
-                    st.dataframe(
-                        input_data,
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-
-        except Exception as error:
-            st.error(f"Prediction failed: {error}")
-
-# --------------------------------------------------
-# PAGE 4: PREDICTION HISTORY
-# --------------------------------------------------
-elif page == "🕘 Prediction History":
-    show_banner("Review predictions made during your current app session.")
-
-    show_section("🕘 Recent Predictions")
-
+# --------------------------- HISTORY ---------------------------
+elif page == "Prediction History":
+    banner("Review predictions made in this active app session")
+    heading("🕘  Prediction History")
     history = st.session_state.prediction_history
-
     if history:
-        history_df = pd.DataFrame(history)
-
-        st.metric("Predictions This Session", len(history))
-
-        st.dataframe(
-            history_df,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        st.download_button(
-            "⬇️ Download Prediction History",
-            data=history_df.to_csv(index=False).encode("utf-8"),
-            file_name="wifi_prediction_history.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-
-        if st.button("🗑️ Clear Prediction History"):
+        hist_df = pd.DataFrame(history)
+        st.metric("Predictions This Session", len(hist_df))
+        st.dataframe(hist_df, use_container_width=True, hide_index=True)
+        st.download_button("⬇️  Download Prediction History", hist_df.to_csv(index=False).encode("utf-8"), "rgukt_prediction_history.csv", "text/csv")
+        if st.button("🗑️  Clear History"):
             st.session_state.prediction_history = []
             st.rerun()
     else:
-        st.info(
-            "No predictions yet. Open 'Predict Wi-Fi Speed' "
-            "and make a prediction to see it here."
-        )
+        st.info("No predictions yet. Open Predict Wi-Fi Speed and run a prediction first.")
+        st.caption("History is session-based and resets when the app session ends.")
 
-# --------------------------------------------------
-# PAGE 5: ABOUT PROJECT
-# --------------------------------------------------
-elif page == "ℹ️ About Project":
-    show_banner("About the College Wi-Fi Speed Prediction project.")
+# --------------------------- ABOUT ---------------------------
+else:
+    banner("Smart Campus Network Analytics")
+    heading("ℹ️  About This Project")
+    st.markdown("""
+    **College Wi-Fi Speed Prediction** estimates download speed from Wi-Fi network conditions using a trained machine-learning model.
 
-    show_section("🎓 Project Overview")
-
-    st.markdown(
-        """
-        This dashboard uses a Machine Learning model to estimate
-        download speed from the supplied Wi-Fi network information.
-
-        **Project features**
-        - Dataset overview and visual analytics
-        - Searchable and filterable dataset
-        - CSV data export
-        - Wi-Fi download-speed prediction
-        - Session-based prediction history
-        - RGUKT RK Valley campus banner support
-
-        **Model input features**
-        """
-    )
-
-    for feature in FEATURES:
-        st.markdown(f"- `{feature}`")
-
+    **Dashboard features**
+    - 📊 Dataset summary and performance charts
+    - 🗄️ Searchable complete dataset and CSV exports
+    - 📶 Prediction form using the six model input fields
+    - 🎉 Prediction completion animation
+    - 🕘 Session-based prediction history
+    """)
+    st.markdown("**Model input features**")
+    st.code("\n".join(FEATURES), language="text")
     st.markdown(f"**Prediction target:** `{TARGET}`")
+    st.info("Keep the trained model and dataset files beside app.py in the GitHub repository.")
 
-    st.info(
-        "Predictions depend on the model and training data. "
-        "They do not measure the current Wi-Fi connection directly."
-    )
+st.markdown('<div class="footer">📶   RGUKT RK Valley   |   College Wi-Fi Speed Prediction   |   Machine Learning Dashboard</div>', unsafe_allow_html=True)import base64
+from pathlib import Path
 
-# --------------------------------------------------
-# FOOTER
-# --------------------------------------------------
-st.divider()
+import joblib
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+# ============================================================
+# RGUKT RK Valley | College Wi-Fi Speed Prediction Dashboard
+# Keep app.py, the CSV dataset, and model file in the same folder.
+# ============================================================
+st.set_page_config(
+    page_title="College Wi-Fi Speed Prediction | RGUKT RK Valley",
+    page_icon="📶",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+BASE_DIR = Path(__file__).parent
+DATA_PATH = BASE_DIR / "rgukt_rk_valley_wifi_dataset.csv"
+MODEL_PATH = BASE_DIR / "wifi_speed_model.pkl"
+BANNER_PATH = BASE_DIR / "rgukt_banner.jpg"  # optional campus photo
+TARGET = "Download_Speed_Mbps"
+FEATURES = [
+    "Connected_Users",
+    "Active_Devices",
+    "Time_of_Day_Hour",
+    "Day_of_Week",
+    "Signal_Strength_dBm",
+    "Available_Bandwidth_Mbps",
+]
+DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+# Exact visual theme inspired by the preview: navy, royal blue, cyan, icy background.
+NAVY = "#082B52"
+NAVY_DARK = "#062447"
+ROYAL = "#1677F8"
+CYAN = "#19B9F2"
+PALE = "#F3F8FF"
+INK = "#103A78"
+MUTED = "#607A9B"
+
 st.markdown(
-    """
-    <div style="text-align:center; color:#64748b; padding:8px;">
-        📶 RGUKT RK Valley | College Wi-Fi Speed Prediction
-        <br>
-        Machine Learning Dashboard
-    </div>
+    f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    html, body, [class*="css"], [data-testid="stAppViewContainer"] {{
+        font-family: 'Inter', Arial, sans-serif;
+    }}
+    .stApp {{ background: {PALE}; color: {INK}; }}
+    .block-container {{ max-width: 1600px; padding-top: 1.05rem; padding-bottom: 1.5rem; }}
+    [data-testid="stSidebar"] {{
+        background: linear-gradient(180deg, {NAVY_DARK} 0%, {NAVY} 55%, #0B477A 100%);
+        border-right: 1px solid #164b7a;
+    }}
+    [data-testid="stSidebar"] * {{ color: #F4F9FF; }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] > div {{ gap: 10px; }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label {{
+        box-sizing: border-box; width: 100%; min-height: 48px; padding: 12px 14px;
+        border: 1px solid rgba(255,255,255,.12); border-radius: 12px;
+        background: rgba(255,255,255,.075); font-size: 15px; font-weight: 600;
+        transition: background .15s ease;
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
+        background: rgba(25,185,242,.23); border-color: rgba(25,185,242,.7);
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {{
+        background: linear-gradient(90deg, {ROYAL}, #258DFB); border-color: #4EA4FF;
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label p {{ color: white !important; }}
+    .brand {{ padding: 6px 2px 14px; }}
+    .brand-icon {{ font-size: 39px; line-height: 1; }}
+    .brand-title {{ font-size: 19px; font-weight: 800; line-height: 1.35; color: white; }}
+    .brand-sub {{ font-size: 12px; color: #B9D7F5; margin-top: 5px; }}
+    .sidebar-bottom {{ margin-top: 22px; padding: 18px 8px 8px; border-top: 1px solid #2A5A82; color: #C5DDF4; font-size: 12px; line-height: 1.8; }}
+    .hero {{
+        position: relative; overflow: hidden; min-height: 150px; padding: 30px 32px;
+        border-radius: 15px; margin: 0 0 18px 0; color: white;
+        background: linear-gradient(100deg, rgba(4,35,72,.97), rgba(10,82,145,.83), rgba(16,119,197,.48)),
+                    linear-gradient(120deg, #0A3566, #1677B8);
+        background-position: center; background-size: cover;
+        box-shadow: 0 6px 20px rgba(14,64,120,.12);
+    }}
+    .hero h1 {{ color: #fff !important; font-size: clamp(25px, 2.5vw, 36px); font-weight: 800; margin: 0 0 7px 0; letter-spacing: -.7px; }}
+    .hero .hero-sub {{ color: #F2F8FF; font-size: 16px; margin: 0; }}
+    .hero .hero-tag {{ color: #D3EEFF; font-size: 12px; margin-top: 9px; letter-spacing: .5px; }}
+    .wifi-mark {{ float: left; font-size: 51px; margin-right: 20px; margin-top: 7px; }}
+    .section-heading {{ font-size: 22px; font-weight: 800; color: #123F91; margin: 14px 0 10px; }}
+    .panel {{ background: #fff; border: 1px solid #D5E5FA; border-radius: 13px; padding: 15px 17px; }}
+    [data-testid="stMetric"] {{ background: white; border: 1px solid #D5E5FA; border-radius: 12px; padding: 16px 17px; box-shadow: 0 2px 8px rgba(20,74,140,.035); }}
+    [data-testid="stMetricLabel"] {{ color: #174A8A; font-weight: 600; }}
+    [data-testid="stMetricValue"] {{ color: #082F6C; font-weight: 800; }}
+    h1, h2, h3 {{ color: #123F91; }}
+    div.stButton > button, div.stDownloadButton > button, div[data-testid="stFormSubmitButton"] button {{
+        border-radius: 10px; min-height: 43px; font-weight: 700; border: 1px solid #1677F8;
+    }}
+    div[data-testid="stDataFrame"] {{ border: 1px solid #D5E5FA; border-radius: 10px; overflow: hidden; }}
+    div[data-testid="stForm"] {{ background: white; border: 1px solid #D5E5FA; border-radius: 14px; padding: 20px; }}
+    .footer {{ margin-top: 18px; padding: 12px 16px; border-radius: 10px; background: #E7F1FF; color: #285C99; font-size: 12px; }}
+    </style>
     """,
     unsafe_allow_html=True,
 )
+
+# Optional local campus banner. For a real campus photo, upload rgukt_banner.jpg to the repo.
+if BANNER_PATH.exists():
+    try:
+        image_b64 = base64.b64encode(BANNER_PATH.read_bytes()).decode("utf-8")
+        st.markdown(
+            f"""<style>.hero {{background-image: linear-gradient(90deg,rgba(4,35,72,.94),rgba(4,55,105,.72),rgba(4,55,105,.28)), url('data:image/jpeg;base64,{image_b64}');}}</style>""",
+            unsafe_allow_html=True,
+        )
+    except Exception:
+        pass
+
+@st.cache_data
+def load_dataset(path, mtime):
+    return pd.read_csv(path)
+
+@st.cache_resource
+def load_model(path, mtime):
+    return joblib.load(path)
+
+def numeric(series):
+    return pd.to_numeric(series, errors="coerce")
+
+def banner(subtitle):
+    st.markdown(
+        f"""<div class="hero"><div class="wifi-mark">📶</div><h1>College Wi-Fi Speed Prediction</h1><p class="hero-sub">RGUKT RK Valley</p><p class="hero-tag">{subtitle}</p></div>""",
+        unsafe_allow_html=True,
+    )
+
+def heading(text):
+    st.markdown(f'<div class="section-heading">{text}</div>', unsafe_allow_html=True)
+
+# Load real project files; don't silently substitute sample data.
+if not DATA_PATH.exists():
+    st.error(f"Dataset not found: {DATA_PATH.name}. Upload it beside app.py in GitHub.")
+    st.stop()
+if not MODEL_PATH.exists():
+    st.error(f"Trained model not found: {MODEL_PATH.name}. Upload it beside app.py in GitHub.")
+    st.stop()
+try:
+    df = load_dataset(str(DATA_PATH), DATA_PATH.stat().st_mtime)
+    model = load_model(str(MODEL_PATH), MODEL_PATH.stat().st_mtime)
+except Exception as exc:
+    st.error(f"Could not load the dataset or model: {exc}")
+    st.stop()
+
+required = FEATURES + [TARGET]
+missing = [c for c in required if c not in df.columns]
+if missing:
+    st.error("Expected columns missing from the dataset: " + ", ".join(missing))
+    st.write("Columns found:", list(df.columns))
+    st.stop()
+
+with st.sidebar:
+    st.markdown(
+        '<div class="brand"><div class="brand-icon">📶</div><div class="brand-title">RGUKT RK Valley<br>Wi-Fi Analytics</div><div class="brand-sub">Machine Learning Dashboard</div></div>',
+        unsafe_allow_html=True,
+    )
+    page = st.radio(
+        "Navigation",
+        ["Dashboard", "Complete Dataset", "Predict Wi-Fi Speed", "Prediction History", "About Project"],
+        format_func=lambda x: {
+            "Dashboard": "🏠  Dashboard",
+            "Complete Dataset": "🗄️  Complete Dataset",
+            "Predict Wi-Fi Speed": "📡  Predict Wi-Fi Speed",
+            "Prediction History": "🕘  Prediction History",
+            "About Project": "ℹ️  About Project",
+        }[x],
+        label_visibility="collapsed",
+    )
+    st.markdown(
+        '<div class="sidebar-bottom">📶<br><br>Project: Wi-Fi Speed Prediction<br>Model: Machine Learning<br>Campus: RGUKT RK Valley</div>',
+        unsafe_allow_html=True,
+    )
+
+if "prediction_history" not in st.session_state:
+    st.session_state.prediction_history = []
+
+# --------------------------- DASHBOARD ---------------------------
+if page == "Dashboard":
+    banner("Smart Campus Network Analytics")
+    speeds = numeric(df[TARGET]).dropna()
+    users = numeric(df["Connected_Users"]).dropna()
+    avg_speed = speeds.mean() if not speeds.empty else np.nan
+    max_speed = speeds.max() if not speeds.empty else np.nan
+    avg_users = users.mean() if not users.empty else np.nan
+
+    a, b, c, d = st.columns(4)
+    a.metric("🗄️  Dataset Records", f"{len(df):,}")
+    b.metric("⚡  Average Download Speed", f"{avg_speed:.2f} Mbps" if pd.notna(avg_speed) else "N/A")
+    c.metric("🚀  Peak Download Speed", f"{max_speed:.2f} Mbps" if pd.notna(max_speed) else "N/A")
+    d.metric("👥  Average Connected Users", f"{avg_users:.1f}" if pd.notna(avg_users) else "N/A")
+
+    heading("▥  Wi-Fi Performance Analytics")
+    chart1, chart2, chart3 = st.columns([1.08, 1.08, 1.08])
+    with chart1:
+        st.markdown("**📶  Download Speed Distribution**")
+        if not speeds.empty:
+            counts, edges = np.histogram(speeds, bins=10)
+            labels = [f"{edges[i]:.0f}–{edges[i+1]:.0f}" for i in range(len(edges)-1)]
+            hist_df = pd.DataFrame({"Speed range (Mbps)": labels, "Records": counts}).set_index("Speed range (Mbps)")
+            st.bar_chart(hist_df, height=260, color=ROYAL)
+        else:
+            st.info("No numeric speed data available.")
+    with chart2:
+        st.markdown("**🔵  Speed vs Connected Users**")
+        scatter = pd.DataFrame({"Connected Users": numeric(df["Connected_Users"]), "Download Speed (Mbps)": numeric(df[TARGET])}).dropna()
+        if not scatter.empty:
+            st.scatter_chart(scatter, x="Connected Users", y="Download Speed (Mbps)", height=260, color=ROYAL)
+        else:
+            st.info("No data available for this chart.")
+    with chart3:
+        st.markdown("**🕒  Average Speed by Hour**")
+        hourly = pd.DataFrame({"Hour": numeric(df["Time_of_Day_Hour"]), "Speed": numeric(df[TARGET])}).dropna()
+        if not hourly.empty:
+            hourly_avg = hourly.groupby("Hour")["Speed"].mean().sort_index()
+            hourly_avg.index = hourly_avg.index.astype(int).astype(str)
+            hourly_avg.index.name = "Hour of Day"
+            st.line_chart(hourly_avg, height=260, color="#7457FF")
+        else:
+            st.info("No hourly data available.")
+
+    heading("🗄️  Complete Dataset")
+    st.caption("Preview of the first five records. Open Complete Dataset to search and view every row.")
+    st.dataframe(df.head(5), use_container_width=True, hide_index=True)
+    st.markdown('<div class="footer">ℹ️   Charts are based on the dataset in this repository. Predictions are estimates, not live Wi-Fi measurements. <span style="float:right">📶   Better Connectivity   |   Smarter Campus</span></div>', unsafe_allow_html=True)
+
+# --------------------------- COMPLETE DATASET ---------------------------
+elif page == "Complete Dataset":
+    banner("Search, filter, inspect, and download the full Wi-Fi dataset")
+    heading("🗄️  Complete Dataset")
+    m1, m2 = st.columns(2)
+    m1.metric("Total Records", f"{len(df):,}")
+    m2.metric("Total Columns", len(df.columns))
+    query = st.text_input("🔎 Search across all columns", placeholder="Search a value, day, signal strength...")
+    filtered = df.copy()
+    if query.strip():
+        mask = filtered.astype(str).apply(lambda col: col.str.contains(query.strip(), case=False, regex=False, na=False)).any(axis=1)
+        filtered = filtered.loc[mask]
+
+    with st.expander("⚙️  Filters", expanded=True):
+        f1, f2, f3 = st.columns(3)
+        with f1:
+            if "Day_of_Week" in filtered.columns:
+                day_options = sorted(filtered["Day_of_Week"].dropna().unique().tolist(), key=str)
+                selected_days = st.multiselect("Day of Week", day_options)
+                if selected_days:
+                    filtered = filtered[filtered["Day_of_Week"].isin(selected_days)]
+        with f2:
+            h = numeric(filtered["Time_of_Day_Hour"]).dropna()
+            if not h.empty and h.min() < h.max():
+                hrange = st.slider("Hour range", int(h.min()), int(h.max()), (int(h.min()), int(h.max())))
+                filtered = filtered[numeric(filtered["Time_of_Day_Hour"]).between(*hrange)]
+        with f3:
+            u = numeric(filtered["Connected_Users"]).dropna()
+            if not u.empty and u.min() < u.max():
+                urange = st.slider("Connected users range", int(u.min()), int(u.max()), (int(u.min()), int(u.max())))
+                filtered = filtered[numeric(filtered["Connected_Users"]).between(*urange)]
+
+    st.caption(f"Showing {len(filtered):,} of {len(df):,} records")
+    st.dataframe(filtered, use_container_width=True, height=520, hide_index=True)
+    d1, d2 = st.columns(2)
+    d1.download_button("⬇️  Download Filtered CSV", filtered.to_csv(index=False).encode("utf-8"), "rgukt_wifi_filtered.csv", "text/csv", use_container_width=True)
+    d2.download_button("⬇️  Download Full Dataset CSV", df.to_csv(index=False).encode("utf-8"), "rgukt_wifi_full_dataset.csv", "text/csv", use_container_width=True)
+
+# --------------------------- PREDICT ---------------------------
+elif page == "Predict Wi-Fi Speed":
+    banner("Enter network conditions to estimate download speed")
+    heading("📡  Wi-Fi Speed Prediction")
+    st.write("Complete all six inputs and click Predict. The result is an ML estimate, not a live speed test.")
+    with st.form("prediction_form"):
+        left, right = st.columns(2)
+        with left:
+            connected = st.number_input("👥 Connected Users", min_value=1, max_value=1000, value=25, step=1)
+            devices = st.number_input("📱 Active Devices", min_value=1, max_value=2000, value=35, step=1)
+            hour = st.slider("🕒 Time of Day (hour)", 0, 23, 12)
+        with right:
+            day_name = st.selectbox("📅 Day of Week", DAYS, index=0)
+            signal = st.slider("📶 Signal Strength (dBm)", -90, -30, -55)
+            bandwidth = st.selectbox("🌐 Available Bandwidth (Mbps)", [100, 200, 300, 500], index=1)
+        submitted = st.form_submit_button("📶  Predict Wi-Fi Speed", type="primary", use_container_width=True)
+
+    if submitted:
+        input_df = pd.DataFrame([{
+            "Connected_Users": connected,
+            "Active_Devices": devices,
+            "Time_of_Day_Hour": hour,
+            "Day_of_Week": DAYS.index(day_name),
+            "Signal_Strength_dBm": signal,
+            "Available_Bandwidth_Mbps": bandwidth,
+        }], columns=FEATURES)
+        try:
+            result = float(model.predict(input_df)[0])
+            if not np.isfinite(result) or result < 0:
+                st.error("The model returned an invalid speed. Check the model and training data.")
+            else:
+                st.success("🎉 Prediction Completed Successfully!")
+                st.balloons()
+                st.metric("📶 Predicted Download Speed", f"{result:.2f} Mbps")
+                st.progress(min(max(result / max(float(speeds.max()) if not speeds.empty else 100, 1), 0.0), 1.0))
+                st.caption("Prediction output is estimated from the trained model; it does not measure current network speed.")
+                st.session_state.prediction_history.insert(0, {
+                    "Connected_Users": connected,
+                    "Active_Devices": devices,
+                    "Time_of_Day_Hour": hour,
+                    "Day_of_Week": day_name,
+                    "Signal_Strength_dBm": signal,
+                    "Available_Bandwidth_Mbps": bandwidth,
+                    "Predicted_Download_Speed_Mbps": round(result, 2),
+                })
+                with st.expander("View prediction inputs"):
+                    st.dataframe(input_df, use_container_width=True, hide_index=True)
+        except Exception as exc:
+            st.error("Prediction failed. The model may expect different feature names or input types.")
+            st.exception(exc)
+
+# --------------------------- HISTORY ---------------------------
+elif page == "Prediction History":
+    banner("Review predictions made in this active app session")
+    heading("🕘  Prediction History")
+    history = st.session_state.prediction_history
+    if history:
+        hist_df = pd.DataFrame(history)
+        st.metric("Predictions This Session", len(hist_df))
+        st.dataframe(hist_df, use_container_width=True, hide_index=True)
+        st.download_button("⬇️  Download Prediction History", hist_df.to_csv(index=False).encode("utf-8"), "rgukt_prediction_history.csv", "text/csv")
+        if st.button("🗑️  Clear History"):
+            st.session_state.prediction_history = []
+            st.rerun()
+    else:
+        st.info("No predictions yet. Open Predict Wi-Fi Speed and run a prediction first.")
+        st.caption("History is session-based and resets when the app session ends.")
+
+# --------------------------- ABOUT ---------------------------
+else:
+    banner("Smart Campus Network Analytics")
+    heading("ℹ️  About This Project")
+    st.markdown("""
+    **College Wi-Fi Speed Prediction** estimates download speed from Wi-Fi network conditions using a trained machine-learning model.
+
+    **Dashboard features**
+    - 📊 Dataset summary and performance charts
+    - 🗄️ Searchable complete dataset and CSV exports
+    - 📶 Prediction form using the six model input fields
+    - 🎉 Prediction completion animation
+    - 🕘 Session-based prediction history
+    """)
+    st.markdown("**Model input features**")
+    st.code("\n".join(FEATURES), language="text")
+    st.markdown(f"**Prediction target:** `{TARGET}`")
+    st.info("Keep the trained model and dataset files beside app.py in the GitHub repository.")
+
+st.markdown('<div class="footer">📶   RGUKT RK Valley   |   College Wi-Fi Speed Prediction   |   Machine Learning Dashboard</div>', unsafe_allow_html=True)
